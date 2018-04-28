@@ -2402,7 +2402,7 @@ doFunct_FormatTime(struct cnffunc *__restrict__ const func,
 	char *str;
 	int retval;
 	long long unixtime;
-	const int resMax = 64;
+	const int resMax = 128;
 	char   result[resMax];
 	char  *formatstr = NULL;
 

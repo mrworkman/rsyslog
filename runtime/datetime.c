@@ -1274,6 +1274,13 @@ timeConvertToUTC(const struct syslogTime *const __restrict__ local,
 	timeval2syslogTime(&tp, utc, 1);
 }
 
+#define CHECK_BOUNDS(a) \
+	if ((o - pBuf + (a)) >= (pBufMax - 1)) { \
+		printf("%d >= %d! - Would cause buffer overflow!\n", (int) (o - pBuf + (a)), pBufMax - 1); \
+		*o = 0; \
+		return -1; \
+	}
+
 /**
  * Format a UNIX timestamp.
  */
@@ -1292,31 +1299,263 @@ formatUnixTimeFromTime_t(time_t unixtime, const char *format, char *pBuf,
 		return -1;
 	}
 
+	// FORMAT variables
+	int d = lt.tm_mday;
+	int m = lt.tm_mon + 1;
+
+	int Y = lt.tm_year + 1900;
+	int C = Y / 100;
+	int y = Y - C * 100;
+
+	// TODO: Describe:
+	if (y < 0 || y > 99)
+		y = 0;
+
+	int H = lt.tm_hour;
+	int I = (lt.tm_hour > 12 ? lt.tm_hour - 12 : lt.tm_hour == 0 ? 12 : lt.tm_hour);
+	int j = lt.tm_yday;
+
+	int M = lt.tm_min;
+	int S = lt.tm_sec;
+
+	const char *p = H < 12 ? "AM" : "PM";
+	const char *P = H < 12 ? "am" : "pm";
+
+	int u = lt.tm_wday;
+	int w = lt.tm_wday == 7 ? 0 : lt.tm_wday;
+	// End FORMAT variables
+
 	// Do our conversions
 	if (strcmp(format, "date-rfc3164") == 0) {
 		assert(pBufMax >= 16);
 
 		// Unlikely to run into this situation, but you never know...
-		if (lt.tm_mon < 0 || lt.tm_mon > 11) {
+		if (m < 1 || m > 12) {
 			DBGPRINTF("lt.tm_mon is out of range. Value: %d\n", lt.tm_mon);
 			return -1;
 		}
 
 		// MMM dd HH:mm:ss
 		sprintf(pBuf, "%s %2d %.2d:%.2d:%.2d",
-			monthNames[lt.tm_mon], lt.tm_mday, lt.tm_hour, lt.tm_min, lt.tm_sec
+			monthNames[m - 1], d, H, M, S
 		);
 	} else if (strcmp(format, "date-rfc3339") == 0) {
 		assert(pBufMax >= 26);
 
 		// YYYY-MM-DDTHH:mm:ss+00:00
 		sprintf(pBuf, "%d-%.2d-%.2dT%.2d:%.2d:%.2dZ",
-			lt.tm_year + 1900, lt.tm_mon + 1, lt.tm_mday, lt.tm_hour, lt.tm_min, lt.tm_sec
+			Y, m, d, H, M, S
 		);
+	} else {
+		// Handle "custom" date/time formats
+
+		char *o = pBuf;
+
+		for (const char *ptr = format; *ptr; ptr++) {
+			if (*ptr == '%') {
+				ptr++;
+
+				switch (*ptr) {
+					case '%':
+						CHECK_BOUNDS(1);
+						*o++ = '%';
+						break;
+					case 'C':
+						// %C (century)
+						CHECK_BOUNDS(2);
+						sprintf(o, "%.2d", C);
+						o += 2;
+						break;
+					case 'd':
+						// %d (day 01-31)
+						CHECK_BOUNDS(2);
+						sprintf(o, "%.2d", d);
+						o += 2;
+						break;
+					case 'D':
+						// American %m/%d/%y (MM/DD/YY)
+						CHECK_BOUNDS(8);
+						sprintf(o, "%.2d/%.2d/%-.2d", m, d, y);
+						o += 8;
+						break;
+					case 'e':
+						// %e (day  1-31)
+						CHECK_BOUNDS(2);
+						sprintf(o, "%2d", d);
+						o += 2;
+						break;
+					case 'F': {
+						// %Y-%m-%d (YYYY-MM-DD)
+
+						// See comment below about %Y
+						int width = getNumberDigits(Y);
+
+						// Add one char for negative years
+						if (Y < 0) width++;
+
+						width += 6;
+						CHECK_BOUNDS(width);
+
+						sprintf(o, "%.4d-%.2d-%.2d", Y, m, d);
+						o += width;
+						break;
+					}
+					case 'H':
+						// %H (hour  00-23)
+						CHECK_BOUNDS(2);
+						sprintf(o, "%.2d", H);
+						o += 2;
+						break;
+					case 'I':
+						// %I (hour  01-12)
+						CHECK_BOUNDS(2);
+						sprintf(o, "%.2d", I);
+						o += 2;
+						break;
+					case 'j':
+						// %j (day of the year  001-366)
+						CHECK_BOUNDS(3);
+						sprintf(o, "%.3d", j);
+						o += 3;
+						break;
+					case 'k':
+						// %k (hour  0-23)
+						CHECK_BOUNDS(2);
+						sprintf(o, "%2d", H);
+						o += 2;
+						break;
+					case 'l':
+						// %l (hour  1-12)
+						CHECK_BOUNDS(2);
+						sprintf(o, "%2d", I);
+						o += 2;
+						break;
+					case 'm':
+						// %m (month 01-12)
+						CHECK_BOUNDS(2);
+						sprintf(o, "%.2d", m);
+						o += 2;
+						break;
+					case 'M':
+						// %M (minute 00-59)
+						CHECK_BOUNDS(2);
+						sprintf(o, "%.2d", M);
+						o += 2;
+						break;
+					case 'n':
+						CHECK_BOUNDS(1);
+						*o++ = '\n';
+						break;
+					case 'p':
+						// %p (AM or PM)
+						CHECK_BOUNDS(2);
+						sprintf(o, "%s", p);
+						o += 2;
+						break;
+					case 'P':
+						// %P (am or pm)
+						CHECK_BOUNDS(2);
+						sprintf(o, "%s", P);
+						o += 2;
+						break;
+					case 'r':
+						// %I:%M:%S %p
+						CHECK_BOUNDS(11);
+						sprintf(o, "%.2d:%.2d:%.2d %s", I, M, S, p);
+						o += 11;
+						break;
+					case 'R':
+						// %H:%M
+						CHECK_BOUNDS(5);
+						sprintf(o, "%.2d:%.2d", H, M);
+						o += 5;
+						break;
+					case 'S':
+						// %S (seconds 00-60)
+						CHECK_BOUNDS(2);
+						sprintf(o, "%.2d", S);
+						o += 2;
+						break;
+					case 't':
+						CHECK_BOUNDS(1);
+						*o++ = '\t';
+						break;
+					case 'T':
+						// %H:%M:%S
+						CHECK_BOUNDS(8);
+						sprintf(o, "%.2d:%.2d:%.2d", H, M, S);
+						o += 8;
+						break;
+					case 'u':
+						// %u (day of week 1-7 - Mon-Sun)
+						CHECK_BOUNDS(1);
+						sprintf(o, "%d", u);
+						o++;
+						break;
+					case 'w':
+						// %w (day of week 0-6 - Sun-Sat)
+						CHECK_BOUNDS(1);
+						sprintf(o, "%d", w);
+						o++;
+						break;
+					case 'y':
+						// %y (two-digit year)
+						CHECK_BOUNDS(2);
+						sprintf(o, "%.2d", y);
+						o += 2;
+						break;
+					case 'Y': {
+						// %Y (year)
+
+						// Need to be careful here to prevent buffer overflows as
+						// years can vary in length. In normal circumstances, we're
+						// unlikely to see that happen, but we could receive garbage
+						// for a date due to misconfiguration, or maliciously formatted
+						// log messages.
+
+						int width = getNumberDigits(Y);
+
+						// Add one char for negative years
+						if (Y < 0) width++;
+
+						CHECK_BOUNDS(width);
+
+						sprintf(o, "%.4d", Y);
+						o += width;
+						break;
+					}
+
+					// We can't determine the time-zone from a UNIX timestamp, so we'll use Z/UTC
+					// If the user wants a specific timezone shown, they can pass it in through
+					// the format specifier (e.g. "%F %T EDT", instead of e.g. "%F %T %Z")
+					case 'z':
+						// %z (timezone offset)
+						CHECK_BOUNDS(1);
+						*o++ = 'Z';
+						break;
+					case 'Z':
+						// %Z (timezone name)
+						sprintf(o, "UTC");
+						CHECK_BOUNDS(3);
+						o += 3;
+						break;
+					default:
+						DBGPRINTF("Unsupported format specifier: %%%c\n", *ptr);
+						break;
+				}
+
+			} else {
+				*o++ = *ptr;
+			}
+		}
+
+		*o = 0;
 	}
 
 	return strlen(pBuf);
 }
+
+#undef CHECK_BOUNDS
 
 /* queryInterface function
  * rgerhards, 2008-03-05

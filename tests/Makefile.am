@@ -314,6 +314,7 @@ TESTS +=  \
 	rscript_trim.sh \
 	rscript_substring.sh \
 	rscript_format_time.sh \
+	rscript_format_time-2.sh \
 	rscript_parse_time.sh \
 	rscript_is_time.sh \
 	rscript_script_error.sh \
@@ -1022,6 +1023,7 @@ EXTRA_DIST= \
 	rscript_trim.sh \
 	rscript_substring.sh \
 	rscript_format_time.sh \
+	rscript_format_time-2.sh \
 	rscript_parse_time.sh \
 	rscript_parse_time_get-ts.py \
 	rscript_is_time.sh \
