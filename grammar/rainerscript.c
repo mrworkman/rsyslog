@@ -2474,16 +2474,55 @@ estimateYear(int cy, int cm, int im) {
 	return cy;
 }
 
+static inline int numscan(char *src, const char *pattern) {
+	int num = 0;
+
+	for (; *pattern && *src; pattern++, src++) {
+		printf("p: %c, s: %c\n", *pattern, *src);
+		switch (*pattern) {
+			case 'd':
+				if (!isdigit(*src))
+					return -1;
+				break;
+			case 'D':
+				if (*src != ' ' && !isdigit(*src))
+					return -1;
+				if (*src == ' ')
+					continue;
+				break;
+			default:
+				return -1;
+		}
+
+		num *= 10;
+		num += (*src - '0');
+	}
+
+	return num;
+}
+
 static void ATTR_NONNULL()
 doFunct_ParseTime(struct cnffunc *__restrict__ const func,
 	struct svar *__restrict__ const ret,
 	void *__restrict__ const usrptr,
 	wti_t *__restrict__ const pWti)
 {
-	struct svar srcVal;
-	int bMustFree;
-	cnfexprEval(func->expr[0], &srcVal, usrptr, pWti);
-	char *str = (char*) var2CString(&srcVal, &bMustFree);
+	struct svar srcVal[2];
+	int bMustFree, bMustFree2;
+
+	char *str = NULL;
+	char *format = NULL;
+
+	// First parameter.
+	cnfexprEval(func->expr[0], &srcVal[0], usrptr, pWti);
+	str = (char*) var2CString(&srcVal[0], &bMustFree);
+
+	// Second parameter, if it exists.
+	if (func->nParams == 2) {
+		cnfexprEval(func->expr[1], &srcVal[1], usrptr, pWti);
+		format = (char*) var2CString(&srcVal[1], &bMustFree2);
+	}
+
 	ret->datatype = 'N';
 	ret->d.n = 0;
 	wtiSetScriptErrno(pWti, RS_SCRIPT_EOK);
@@ -2508,15 +2547,71 @@ doFunct_ParseTime(struct cnffunc *__restrict__ const func,
 			ret->d.n = datetime.syslogTime2time_t(&s);
 			DBGPRINTF("parse_time: RFC3164 format found\n");
 		} else {
-			DBGPRINTF("parse_time: no valid format found\n");
-			wtiSetScriptErrno(pWti, RS_SCRIPT_EINVAL);
+			// Parse the timestamp using the format specified
+			// in the second parameter to parse_time().
+
+			char *o = str;
+
+			for (const char *ptr = format; *ptr; ptr++) {
+				int num = 0;
+
+				if (*ptr == '%') {
+					ptr++;
+
+					switch (*ptr) {
+						case '%':
+							// If the next character in o is %, skip it
+							if (*o++ == '%')
+								continue;
+							break;
+						case 'C':
+							// %C (century)
+
+							if ((num = numscan(o, "dd")) == -1)
+								break;
+							o += 2;
+							continue;
+						case 'd':
+							// %d (day 01-31)
+							if ((num = numscan(o, "dd")) == -1)
+								break;
+							o += 2;
+							continue;
+						case 'D':
+							// American %m/%d/%y (MM/DD/YY)
+							break;
+						case 'e':
+							// %e (day  1-31)
+							if ((num = numscan(o, "Dd")) == -1)
+								break;
+							o += 2;
+							continue;
+						case 'F':
+							// %Y-%m-%d (YYYY-MM-DD)
+							break;
+						
+					}
+
+					// FAILED
+					DBGPRINTF("parse_time: no valid format found\n");
+					wtiSetScriptErrno(pWti, RS_SCRIPT_EINVAL);
+
+				} else {
+					// Skip any other characters
+				}
+			}
+
 		}
 	}
 
 	if(bMustFree) {
 		free(str);
 	}
-	varFreeMembers(&srcVal);
+	if(bMustFree2 && format != NULL) {
+		free(format);
+	}
+	varFreeMembers(&srcVal[0]);
+	varFreeMembers(&srcVal[1]);
 
 }
 
@@ -3555,7 +3650,7 @@ static struct scriptFunct functions[] = {
 	{"wrap", 2, 3, doFunct_Wrap, NULL, NULL},
 	{"random", 1, 1, doFunct_RandomGen, NULL, NULL},
 	{"format_time", 2, 2, doFunct_FormatTime, NULL, NULL},
-	{"parse_time", 1, 1, doFunct_ParseTime, NULL, NULL},
+	{"parse_time", 1, 2, doFunct_ParseTime, NULL, NULL},
 	{"is_time", 1, 2, doFunct_IsTime, NULL, NULL},
 	{"parse_json", 2, 2, doFunc_parse_json, NULL, NULL},
 	{"script_error", 0, 0, doFunct_ScriptError, NULL, NULL},

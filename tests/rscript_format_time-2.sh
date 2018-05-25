@@ -26,6 +26,8 @@ set $!datetime!neg = format_time(-801507165811, "%%Y: %Y, %%y: %y");
 # set $!datetime!str1 = format_time("1507165811", "date-rfc3339");
 # set $!datetime!strinv1 = format_time("ABC", "date-rfc3339");
 
+set $!datetime!xxx = parse_time("03345", "%C%C");
+
 template(name="outfmt" type="string" string="%!datetime%\n")
 local4.* action(type="omfile" file="rsyslog.out.log" template="outfmt")
 local4.* :omstdout:;outfmt

@@ -1307,7 +1307,11 @@ formatUnixTimeFromTime_t(time_t unixtime, const char *format, char *pBuf,
 	int C = Y / 100;
 	int y = Y - C * 100;
 
-	// TODO: Describe:
+	// Like in strftime, we don't support centuries outside of 0-99
+	if (C < 0 || C > 99)
+		C = 0;
+
+	// Like in strftime, we don't support years outside of 0-99
 	if (y < 0 || y > 99)
 		y = 0;
 
