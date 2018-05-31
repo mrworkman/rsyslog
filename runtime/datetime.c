@@ -1376,34 +1376,12 @@ formatUnixTimeFromTime_t(time_t unixtime, const char *format, char *pBuf,
 						sprintf(o, "%.2d", d);
 						o += 2;
 						break;
-					case 'D':
-						// American %m/%d/%y (MM/DD/YY)
-						CHECK_BOUNDS(8);
-						sprintf(o, "%.2d/%.2d/%-.2d", m, d, y);
-						o += 8;
-						break;
 					case 'e':
 						// %e (day  1-31)
 						CHECK_BOUNDS(2);
 						sprintf(o, "%2d", d);
 						o += 2;
 						break;
-					case 'F': {
-						// %Y-%m-%d (YYYY-MM-DD)
-
-						// See comment below about %Y
-						int width = getNumberDigits(Y);
-
-						// Add one char for negative years
-						if (Y < 0) width++;
-
-						width += 6;
-						CHECK_BOUNDS(width);
-
-						sprintf(o, "%.4d-%.2d-%.2d", Y, m, d);
-						o += width;
-						break;
-					}
 					case 'H':
 						// %H (hour  00-23)
 						CHECK_BOUNDS(2);
@@ -1446,10 +1424,6 @@ formatUnixTimeFromTime_t(time_t unixtime, const char *format, char *pBuf,
 						sprintf(o, "%.2d", M);
 						o += 2;
 						break;
-					case 'n':
-						CHECK_BOUNDS(1);
-						*o++ = '\n';
-						break;
 					case 'p':
 						// %p (AM or PM)
 						CHECK_BOUNDS(2);
@@ -1462,33 +1436,11 @@ formatUnixTimeFromTime_t(time_t unixtime, const char *format, char *pBuf,
 						sprintf(o, "%s", P);
 						o += 2;
 						break;
-					case 'r':
-						// %I:%M:%S %p
-						CHECK_BOUNDS(11);
-						sprintf(o, "%.2d:%.2d:%.2d %s", I, M, S, p);
-						o += 11;
-						break;
-					case 'R':
-						// %H:%M
-						CHECK_BOUNDS(5);
-						sprintf(o, "%.2d:%.2d", H, M);
-						o += 5;
-						break;
 					case 'S':
 						// %S (seconds 00-60)
 						CHECK_BOUNDS(2);
 						sprintf(o, "%.2d", S);
 						o += 2;
-						break;
-					case 't':
-						CHECK_BOUNDS(1);
-						*o++ = '\t';
-						break;
-					case 'T':
-						// %H:%M:%S
-						CHECK_BOUNDS(8);
-						sprintf(o, "%.2d:%.2d:%.2d", H, M, S);
-						o += 8;
 						break;
 					case 'u':
 						// %u (day of week 1-7 - Mon-Sun)
@@ -1531,7 +1483,7 @@ formatUnixTimeFromTime_t(time_t unixtime, const char *format, char *pBuf,
 
 					// We can't determine the time-zone from a UNIX timestamp, so we'll use Z/UTC
 					// If the user wants a specific timezone shown, they can pass it in through
-					// the format specifier (e.g. "%F %T EDT", instead of e.g. "%F %T %Z")
+					// the format specifier (e.g. "%H:%M EDT", instead of e.g. "%H:%M %Z")
 					case 'z':
 						// %z (timezone offset)
 						CHECK_BOUNDS(1);

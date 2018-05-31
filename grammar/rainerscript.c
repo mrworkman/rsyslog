@@ -2550,7 +2550,18 @@ doFunct_ParseTime(struct cnffunc *__restrict__ const func,
 			// Parse the timestamp using the format specified
 			// in the second parameter to parse_time().
 
+			struct tm lt;
 			char *o = str;
+
+			memset(&lt, 0, sizeof(struct tm));
+
+			#define CHECK_VAL(c, p, l, h) \
+				case (c): \
+					if ((num = numscan(o, (p))) == -1) \
+						break; \
+					if (num < (l) || num > (h)) \
+						break; \
+					o += sizeof(p) - 1
 
 			for (const char *ptr = format; *ptr; ptr++) {
 				int num = 0;
@@ -2564,32 +2575,73 @@ doFunct_ParseTime(struct cnffunc *__restrict__ const func,
 							if (*o++ == '%')
 								continue;
 							break;
-						case 'C':
-							// %C (century)
 
-							if ((num = numscan(o, "dd")) == -1)
+						// CHECK_VAL('C', "dd",   0, 99);   // %C (century 00-99)
+						CHECK_VAL('d', "dd",   1, 31);   // %d (day 01-31)
+							lt.tm_mday = num;
+							continue;
+						CHECK_VAL('e', "Dd",   1, 31);   // %e (day  1-31)
+							lt.tm_mday = num;
+							continue;
+						CHECK_VAL('H', "dd",   0, 23);   // %H (hour 00-23)
+							lt.tm_hour = num;
+							continue;
+						CHECK_VAL('I', "dd",   1, 12);   // %I (hour 01-12)
+							lt.tm_hour = num;
+							continue;
+						// CHECK_VAL('j', "ddd",  1, 366, tm.tm_yday);  // %j (day of the year 001-366)
+						//	continue;
+						CHECK_VAL('k', "Dd",   0, 23);   // %k (hour  0-23)
+							lt.tm_hour = num;
+							continue;
+						CHECK_VAL('l', "Dd",   1, 12);   // %l (hour  1-12)
+							lt.tm_hour = num;
+							continue;
+						CHECK_VAL('m', "dd",   1, 12);   // %m (month 01-12)
+							lt.tm_mon = num;
+							continue;
+						CHECK_VAL('M', "dd",   0, 59);   // %M (minute 00-59)
+							lt.tm_min = num;
+							continue;
+						CHECK_VAL('S', "dd", 0, 60);   // %S (seconds 00-60)
+							lt.tm_sec = num;
+							continue;
+						CHECK_VAL('u', "d", 1, 7);    // %u (day of week 1-7 - Mon-Sun)
+							lt.tm_wday = num - 1;
+							continue;
+						CHECK_VAL('w', "d", 0, 6);    // %w (day of week 0-6 - Sun-Sat)
+							lt.tm_wday = num;
+							continue;
+
+						CHECK_VAL('y', "dd", 0, 99);   // %y (two-digit year 00-99)
+							lt.tm_year = num + 100;
+							continue;
+						CHECK_VAL('Y', "dddd", 0, 9999); // %Y (year 0000-9999)
+							lt.tm_year = num - 1900;
+							continue;
+
+						case 'p':
+							// %p (AM or PM)
+							if (!strcmp(o, "AM") || !strcmp(o, "PM"))
 								break;
 							o += 2;
 							continue;
-						case 'd':
-							// %d (day 01-31)
-							if ((num = numscan(o, "dd")) == -1)
+						case 'P':
+							// %P (am or pm)
+							if (!strcmp(o, "am") || !strcmp(o, "pm"))
 								break;
 							o += 2;
 							continue;
-						case 'D':
-							// American %m/%d/%y (MM/DD/YY)
+						case 'z':
+							// %z (timezone offset)
 							break;
-						case 'e':
-							// %e (day  1-31)
-							if ((num = numscan(o, "Dd")) == -1)
-								break;
-							o += 2;
-							continue;
-						case 'F':
-							// %Y-%m-%d (YYYY-MM-DD)
+						case 'Z':
+							// %Z (timezone name)
 							break;
-						
+
+						default:
+							DBGPRINTF("Unsupported format specifier: %%%c\n", *ptr);
+							break;
 					}
 
 					// FAILED
